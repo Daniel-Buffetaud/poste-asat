@@ -17,18 +17,18 @@
   /* Layout : une colonne pour le téléphone au bord de piste (gros boutons, fort contraste au soleil) ; écran « Chrono » plus large pour la cellule. */
   :root {
     --bg: #e9f4f5; --surface: #ffffff; --surface-2: #d8ebee; --fg: #0e2a47; --muted: #4a6274; --line: #bcd7dc;
-    --flag: #1f5fae; --flag-ink: #ffffff; --plot: #ffd43b; --plot-ink: #2b2200; --dt: #f76707; --dt-ink: #1f0e00; --ep: #b91c1c; --ep-ink: #ffffff;
+    --flag: #1f5fae; --flag-ink: #ffffff; --plot: #ffd43b; --plot-ink: #2b2200; --dt: #f76707; --dt-ink: #1f0e00; --ep: #b91c1c; --ep-ink: #ffffff; --flag-soft: #d6e4f7; --men: #1c56a8; --women: #c2255c;
     --ok: #2b8a3e; --warn: #b35c00; --focus: #1f5fae;
     --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
     --f-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
     --bg: #0b1824; --surface: #12232f; --surface-2: #1b3140; --fg: #eaf4f6; --muted: #9fb6c2; --line: #2a4252;
-    --flag: #5b9bf0; --flag-ink: #06121f; --plot: #ffd43b; --plot-ink: #2b2200; --dt: #fd7e14; --dt-ink: #1f0e00; --ep: #e03131; --ep-ink: #ffffff;
+    --flag: #5b9bf0; --flag-ink: #06121f; --plot: #ffd43b; --plot-ink: #2b2200; --dt: #fd7e14; --dt-ink: #1f0e00; --ep: #e03131; --ep-ink: #ffffff; --flag-soft: #183453; --men: #7fb0f7; --women: #f783ac;
     --ok: #51cf66; --warn: #ffa94d; --focus: #74c0fc; color-scheme: dark } }
   :root[data-theme="dark"] {
     --bg: #0b1824; --surface: #12232f; --surface-2: #1b3140; --fg: #eaf4f6; --muted: #9fb6c2; --line: #2a4252;
-    --flag: #5b9bf0; --flag-ink: #06121f; --plot: #ffd43b; --plot-ink: #2b2200; --dt: #fd7e14; --dt-ink: #1f0e00; --ep: #e03131; --ep-ink: #ffffff;
+    --flag: #5b9bf0; --flag-ink: #06121f; --plot: #ffd43b; --plot-ink: #2b2200; --dt: #fd7e14; --dt-ink: #1f0e00; --ep: #e03131; --ep-ink: #ffffff; --flag-soft: #183453; --men: #7fb0f7; --women: #f783ac;
     --ok: #51cf66; --warn: #ffa94d; --focus: #74c0fc; color-scheme: dark }
 
   * { box-sizing: border-box; }
@@ -123,15 +123,33 @@
   .tag.P { background: var(--plot); color: var(--plot-ink); } .tag.D { background: var(--dt); color: var(--dt-ink); } .tag.E { background: var(--ep); color: var(--ep-ink); }
   /* En-tête toujours visible : le bouton Pilotes / Saisie reste à portée de pouce */
   header.top { position: sticky; top: 0; z-index: 20; background: var(--bg); padding: 8px 0; margin: -8px 0 0; }
-  .navbtn { padding: 10px 14px; font-family: var(--f-display); font-weight: 800; font-size: 1.1rem; text-transform: uppercase; letter-spacing: .04em; background: var(--flag); color: var(--flag-ink); border-radius: 10px; min-height: 44px; }
-  .plist { display: grid; gap: 6px; }
-  .prow { display: grid; grid-template-columns: 2.6rem 4.2rem 1fr; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); min-height: 56px; }
-  .prow:active { transform: scale(.99); }
-  .prow .o { font-family: var(--f-display); font-weight: 700; color: var(--muted); font-size: 1.05rem; text-align: right; }
-  .prow .n { font-family: var(--f-display); font-weight: 800; font-size: 1.9rem; line-height: 1; font-variant-numeric: tabular-nums; }
-  .prow .nm { font-weight: 700; line-height: 1.2; min-width: 0; }
-  .prow .vh { display: block; font-weight: 400; font-size: .85rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .prow.hit { outline: 3px solid var(--flag); }
+  /* Zone du numéro : deux demi-zones (clavier | liste des pilotes), puis une zone de hauteur fixe qui montre l'un ou l'autre */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .half { min-height: 62px; padding: 5px 8px; background: var(--surface-2); border: 2px solid transparent; border-radius: 12px; display: grid; align-content: center; justify-items: center; gap: 2px; text-align: center; min-width: 0; }
+  .half .hl { font-family: var(--f-display); font-weight: 700; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .half .big { font-family: var(--f-display); font-weight: 800; font-size: 2.1rem; line-height: 1; font-variant-numeric: tabular-nums; }
+  .half .big.empty { font-size: .95rem; font-family: var(--f-body); font-weight: 400; color: var(--muted); line-height: 1.3; }
+  .half .nm { font-weight: 700; font-size: .9rem; line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
+  .half .nm.empty { font-weight: 400; color: var(--muted); }
+  .half .nm.m { color: var(--men); } .half .nm.f { color: var(--women); }
+  .half[aria-pressed="true"] { background: var(--flag-soft); border-color: var(--flag); }
+  .half[aria-pressed="true"] .hl { color: var(--flag); }
+  .bibname { margin-top: -4px; font-size: .82rem; }
+  .zone { height: 294px; }
+  .zone .pad { height: 100%; grid-template-rows: repeat(4, 1fr); }
+  .zone .pad button { padding: 0; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 54px; gap: 6px; height: 100%; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+  .tile { background: var(--surface-2); display: grid; align-content: center; justify-items: center; gap: 1px; padding: 2px 3px; min-width: 0; position: relative; }
+  .tile .n { font-family: var(--f-display); font-weight: 800; font-size: 1.5rem; line-height: 1; font-variant-numeric: tabular-nums; }
+  .tile .s { font-size: .64rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
+  .tile .o { position: absolute; top: 2px; left: 5px; font-size: .6rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tile.m { color: var(--men); } .tile.f { color: var(--women); }
+  .tile.sel { background: var(--flag); color: var(--flag-ink); }
+  .tile.f.sel { background: var(--women); color: #fff; }
+  .tile.sel .o { color: inherit; opacity: .8; }
+  .tile.upd { background: transparent; border: 1.5px dashed var(--line); color: var(--muted); font-size: .72rem; font-weight: 700; line-height: 1.15; }
+  .loadzone { height: 100%; overflow-y: auto; display: grid; align-content: start; gap: 10px; }
+  .loadzone textarea { min-height: 70px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -143,24 +161,7 @@
     <header class="row between top">
       <h1><span class="flagmark" aria-hidden="true"></span>Poste <span id="hdrPoste">—</span></h1>
       <span id="modePill" class="pill off" hidden>Envoi par message</span>
-      <button id="navBtn" class="navbtn" onclick="togglePilots()" aria-controls="viewPilotes">👥 Pilotes</button>
     </header>
-
-    <!-- ======================= LISTE DES PILOTES ======================= -->
-    <section id="viewPilotes" class="wrap" style="padding:0;gap:14px;max-width:none" hidden>
-      <div class="card">
-        <div class="row between"><h2>Ordre de passage</h2><span id="plistInfo" class="small muted"></span></div>
-        <p class="note" id="plistHelp">Touchez un pilote pour revenir à la saisie avec son numéro déjà tapé.</p>
-        <div class="plist" id="plist"></div>
-      </div>
-      <div class="card" id="plistLoad">
-        <h2 id="plistLoadTitle">Charger la liste</h2>
-        <p class="note">Copiez le message « Liste des pilotes » envoyé par le PC course dans votre messagerie, puis touchez « Coller la liste ».</p>
-        <button class="btn main" onclick="pasteList()" style="padding:14px;font-size:1.05rem">Coller la liste</button>
-        <textarea id="plistIn" class="msg" placeholder="Ou collez le message ici à la main" aria-label="Message de la liste des pilotes" oninput="loadListFrom(this.value, true)"></textarea>
-        <p id="plistMsg" class="note" aria-live="polite"></p>
-      </div>
-    </section>
 
     <div class="tabs" role="tablist" hidden>
       <button id="tabSaisie" role="tab" aria-selected="true" onclick="setTab('saisie')">Saisie au poste</button>
@@ -190,9 +191,23 @@
 
       <div class="card">
         <span class="label">N° du pilote</span>
-        <div id="bibDisplay" class="bib empty" aria-live="polite">Tapez le numéro</div>
+        <div class="split">
+          <button class="half" id="halfPad" onclick="setPick('pad')"><span class="hl">Taper n°</span><span id="bibDisplay" class="big empty" aria-live="polite">Tapez le numéro</span></button>
+          <button class="half" id="halfList" onclick="setPick('list')"><span class="hl">Choisir pilote</span><span id="pickName" class="nm empty">Ouvrir la liste ›</span></button>
+        </div>
         <div id="bibName" class="bibname muted"></div>
-        <div class="pad" id="pad"></div>
+        <div class="zone">
+          <div class="pad" id="pad"></div>
+          <div class="tiles" id="tiles" hidden></div>
+          <div class="loadzone" id="loadZone" hidden>
+            <div class="row between"><h2 id="plistLoadTitle">Charger la liste</h2><span id="plistInfo" class="small muted"></span></div>
+            <p class="note" style="margin:0">Copiez le message « Liste des pilotes » envoyé par le PC course dans votre messagerie, puis touchez « Coller la liste ».</p>
+            <button class="btn main" onclick="pasteList()" style="padding:12px;font-size:1.05rem">Coller la liste</button>
+            <textarea id="plistIn" class="msg" placeholder="Ou collez le message ici à la main" aria-label="Message de la liste des pilotes" oninput="loadListFrom(this.value, true)"></textarea>
+            <p id="plistMsg" class="note" aria-live="polite" style="margin:0"></p>
+            <button class="btn" id="plistBack" onclick="loadOpen=false;render()">← Retour à la liste</button>
+          </div>
+        </div>
       </div>
 
       <div class="acts">
@@ -289,7 +304,8 @@ for (const e of st.entries) { if (!e.poste) { const m = /^p(\d)/.exec(e.id || ''
 function persist() { try { localStorage.setItem(LS, JSON.stringify(st)); } catch (e) {} }
 let bib = '';
 let tab = 'saisie';
-let showPilots = false;
+let loadOpen = false;
+if (st.pick !== 'list') st.pick = 'pad';
 if (!st.list || !Array.isArray(st.list.pilots)) st.list = null;
 let undoTimer = null;
 
@@ -362,7 +378,7 @@ function parseList(text) {
   const t = String(text || '').replace(/\r/g, '');
   const head = /CLN1L\|([^|\n]*)\|([^|\n]*)\|([^|\n]*)/.exec(t);
   const pilots = [];
-  for (const m of t.matchAll(/CLN1P\|([^|\n]*)\|([^|\n]*)\|([^|\n]*)\|([^\n]*)/g)) pilots.push({ o: m[1].trim(), n: m[2].trim(), name: m[3].trim(), veh: m[4].replace(/\|.*$/, '').trim() });
+  for (const m of t.matchAll(/CLN1P\|([^|\n]*)\|([^|\n]*)\|([^|\n]*)\|([^|\n]*)(?:\|([HF]))?/g)) pilots.push({ o: m[1].trim(), n: m[2].trim(), name: m[3].trim(), veh: m[4].trim(), g: m[5] === 'F' ? 'F' : 'H' });
   if (!pilots.length) return null;
   pilots.sort((a, b) => (parseInt(a.o, 10) || 1e9) - (parseInt(b.o, 10) || 1e9));
   return { ev: head ? head[1] : '', name: head ? head[2].trim() : '', date: head ? head[3].trim() : '', pilots, at: new Date().toISOString() };
@@ -374,6 +390,7 @@ function loadListFrom(text, quiet) {
   st.list = l; persist();
   document.getElementById('plistIn').value = '';
   msg.textContent = `Liste chargée : ${l.pilots.length} pilote(s).`;
+  loadOpen = false; st.pick = 'list'; persist();
   render();
   return true;
 }
@@ -383,18 +400,35 @@ async function pasteList() {
   catch (e) { msg.textContent = 'Le téléphone n\'autorise pas la lecture du presse-papiers : collez le message dans la zone ci-dessous (appui long → Coller).'; document.getElementById('plistIn').focus(); }
 }
 function pilotByBib(n) { return st.list && st.list.pilots.find(p => p.n === String(n)); }
-function togglePilots() { showPilots = !showPilots; render(); window.scrollTo({ top: 0 }); }
-function pickPilot(n) { bib = String(n); showPilots = false; tab = 'saisie'; render(); window.scrollTo({ top: 0 }); }
-function renderPilots() {
-  const l = st.list;
-  document.getElementById('navBtn').textContent = showPilots ? '✎ Saisie' : '👥 Pilotes';
-  document.getElementById('navBtn').setAttribute('aria-pressed', showPilots);
-  document.getElementById('plistInfo').textContent = l ? `${l.pilots.length} pilote(s)` + (l.name ? ' · ' + l.name : '') + (l.date ? ' · ' + l.date.split('-').reverse().join('/') : '') : '';
-  document.getElementById('plistHelp').hidden = !l;
+// « LARDANT Francis » → nom (mots en capitales) et prénom
+function splitName(full) {
+  const w = String(full || '').split(/\s+/).filter(Boolean);
+  const up = x => x === x.toUpperCase() && /[A-ZÀ-Ý]/.test(x);
+  const last = w.filter(up), first = w.filter(x => !up(x));
+  return last.length && first.length ? { last: last.join(' '), first: first.join(' ') } : { last: w[0] || '', first: w.slice(1).join(' ') };
+}
+function setPick(m) { st.pick = m; loadOpen = m === 'list' && !st.list; persist(); render(); }
+function pickPilot(n) { bib = String(n); render(); }
+function renderPick() {
+  const l = st.list, list = st.pick === 'list';
+  document.getElementById('halfPad').setAttribute('aria-pressed', !list);
+  document.getElementById('halfList').setAttribute('aria-pressed', list);
+  const pl = bib ? pilotByBib(bib) : null, nm = document.getElementById('pickName');
+  if (pl) { const sn = splitName(pl.name); nm.innerHTML = `${esc(sn.first)}<br>${esc(sn.last)}`; nm.className = 'nm ' + (pl.g === 'F' ? 'f' : 'm'); }
+  else { nm.textContent = bib && l ? 'n° absent de la liste' : l ? 'Ouvrir la liste ›' : 'Charger la liste ›'; nm.className = 'nm empty'; }
+  const showLoad = list && (loadOpen || !l);
+  document.getElementById('pad').hidden = list;
+  document.getElementById('tiles').hidden = !list || showLoad;
+  document.getElementById('loadZone').hidden = !showLoad;
   document.getElementById('plistLoadTitle').textContent = l ? 'Mettre à jour la liste' : 'Charger la liste';
-  document.getElementById('plist').innerHTML = l
-    ? l.pilots.map(p => `<button class="prow${p.n === bib ? ' hit' : ''}" onclick="pickPilot('${esc(p.n)}')"><span class="o">${esc(p.o)}</span><span class="n">${esc(p.n)}</span><span class="nm">${esc(p.name)}<span class="vh">${esc(p.veh)}</span></span></button>`).join('')
-    : '<p class="note">Aucune liste sur ce téléphone pour le moment.</p>';
+  document.getElementById('plistInfo').textContent = l ? `${l.pilots.length} pilote(s)` + (l.date ? ' · ' + l.date.split('-').reverse().join('/') : '') : '';
+  document.getElementById('plistBack').hidden = !l;
+  if (list && !showLoad) {
+    const t = document.getElementById('tiles'), top = t.scrollTop;
+    t.innerHTML = l.pilots.map(p => `<button class="tile ${p.g === 'F' ? 'f' : 'm'}${p.n === bib ? ' sel' : ''}" onclick="pickPilot('${esc(p.n)}')" aria-label="n° ${esc(p.n)} ${esc(p.name)}"><span class="o">${esc(p.o)}</span><span class="n">${esc(p.n)}</span><span class="s">${esc(splitName(p.name).last)}</span></button>`).join('')
+      + `<button class="tile upd" onclick="loadOpen=true;render()">⟳ Mettre à jour la liste</button>`;
+    t.scrollTop = top;
+  }
 }
 
 /* ---------------- Saisie ---------------- */
@@ -527,10 +561,8 @@ function render() {
   pill.textContent = isLive ? 'En direct' : 'Envoi par message';
   document.getElementById('tabSaisie').setAttribute('aria-selected', tab === 'saisie');
   document.getElementById('tabChrono').setAttribute('aria-selected', tab === 'chrono');
-  document.getElementById('viewSaisie').hidden = tab !== 'saisie' || showPilots;
-  document.getElementById('viewPilotes').hidden = !showPilots;
-  renderPilots();
-  document.getElementById('viewChrono').hidden = tab !== 'chrono' || showPilots;
+  document.getElementById('viewSaisie').hidden = tab !== 'saisie';
+  document.getElementById('viewChrono').hidden = tab !== 'chrono';
   document.getElementById('wrap').classList.toggle('wide', tab === 'chrono');
   document.getElementById('posteSel').value = st.poste;
   const w = document.getElementById('whoInput'); if (document.activeElement !== w) w.value = st.who;
@@ -552,7 +584,8 @@ function renderBib() {
   el.classList.toggle('empty', !bib);
   for (const id of ['btnP', 'btnD', 'btnE']) document.getElementById(id).disabled = !bib || !st.poste;
   const pl = bib ? pilotByBib(bib) : null;
-  document.getElementById('bibName').textContent = bib ? (pl ? pl.name + ' · ' : (st.list ? 'n° absent de la liste · ' : '')) + `${heatLabel(st.heat)} · poste ${st.poste || '?'}` : '';
+  document.getElementById('bibName').textContent = bib ? `${heatLabel(st.heat)} · poste ${st.poste || '?'}` + (pl ? ' · ordre ' + pl.o : '') : '\u00a0';
+  renderPick();
 }
 function renderLog() {
   const list = st.entries.slice().reverse();
