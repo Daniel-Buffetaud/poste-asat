@@ -148,6 +148,9 @@
   .tile.f.sel { background: var(--women); color: #fff; }
   .tile.sel .o { color: inherit; opacity: .8; }
   .tile.upd { background: transparent; border: 1.5px dashed var(--line); color: var(--muted); font-size: .72rem; font-weight: 700; line-height: 1.15; }
+  .joined { display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+  .joined .st { font-family: var(--f-display); font-weight: 800; font-size: 1.15rem; text-transform: uppercase; letter-spacing: .03em; }
+  .joined .st.ok { color: var(--ok); } .joined .st.wait { color: var(--warn); } .joined .st.ko { color: var(--ep); }
   .loadzone { height: 100%; overflow-y: auto; display: grid; align-content: start; gap: 10px; }
   .loadzone textarea { min-height: 70px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -181,6 +184,14 @@
             <input id="whoInput" type="text" maxlength="30" placeholder="Votre nom" oninput="setWho(this.value)" style="width:100%;margin-top:4px">
           </label>
         </div>
+        <div id="joinBox" class="grid" style="gap:6px">
+          <label class="label" for="codeInput">Code de l'épreuve</label>
+          <div class="row" style="flex-wrap:nowrap">
+            <input id="codeInput" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Ex : TARAVAO-4821" style="flex:1;font-family:var(--f-display);font-weight:700;font-size:1.2rem;letter-spacing:.06em;text-transform:uppercase">
+            <button class="btn main" id="joinBtn" onclick="joinEvent()">Rejoindre</button>
+          </div>
+        </div>
+        <div id="joinedBox" class="joined" hidden></div>
         <p id="eventLine" class="note"></p>
       </div>
 
@@ -277,10 +288,10 @@
           </table></div>
         </div>
         <div class="card">
-          <h2>Vers Clau'nocourse</h2>
-          <p class="note">Copiez ce bloc et collez-le dans Clau'nocourse avec « Coller pénalités ». Le recoller plus tard met simplement à jour les infractions déjà reçues.</p>
-          <textarea id="chronoOut" class="msg" readonly aria-label="Bloc pour Clau'nocourse"></textarea>
-          <div class="row"><button class="btn main" onclick="copyChrono()">Copier pour Clau'nocourse</button></div>
+          <h2>Vers ASAT Chrono</h2>
+          <p class="note">Copiez ce bloc et collez-le dans ASAT Chrono avec « Coller pénalités ». Le recoller plus tard met simplement à jour les infractions déjà reçues.</p>
+          <textarea id="chronoOut" class="msg" readonly aria-label="Bloc pour ASAT Chrono"></textarea>
+          <div class="row"><button class="btn main" onclick="copyChrono()">Copier pour ASAT Chrono</button></div>
         </div>
       </div>
     </section>
@@ -312,7 +323,7 @@ let undoTimer = null;
 /* ---------------- Mode direct (base partagée) ---------------- */
 let db = null, canWrite = false, cfg = null, live = [], liveRep = [], unsubLive = null, unsubRep = null, retryTimer = null;
 function todayCode() { const d = new Date(); return '' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'); }
-function curCode() { return (cfg && cfg.code) || todayCode(); }
+function curCode() { return st.live && st.live.code ? st.live.code : todayCode(); }
 
 function isoLocal(d) {
   const p = n => String(Math.floor(Math.abs(n))).padStart(2, '0');
@@ -324,52 +335,89 @@ function newId() { return 'p' + (st.poste || '0') + Date.now().toString(36).slic
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function clean(s) { return String(s || '').replace(/[|\r\n]/g, ' ').trim(); }
 
-async function initLive() {
-  if (!window.claude || typeof window.claude.use !== 'function') return;
-  try { db = await window.claude.use('db'); } catch (e) { db = null; }
-  if (!db) return;
+/* Liaison Firebase : le module en bas de page remplit window.FB et connecte le téléphone de façon anonyme.
+   Le téléphone rejoint l'épreuve avec son code ; le PC course l'accepte ; ensuite les saisies partent seules. */
+let fbUser = null, devStatus = null, liveSubs = [], liveSubCode = null, inflight = new Set(), joinMsg = '', joinBusy = false, devTimer = null;
+if (!st.live || typeof st.live.code !== 'string') st.live = null;
+function liveFlags() { db = !!(window.FB && fbUser && st.live); canWrite = db && devStatus === 'ok'; }
+window.liveReady = () => { window.FB.signInAnon().catch(() => { joinMsg = 'Connexion impossible pour le moment (réseau).'; render(); }); render(); };
+window.liveAuthChanged = u => { fbUser = u || null; subscribeLive(); render(); };
+function normCode(v) { return String(v || '').toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9-]/g, ''); }
+async function joinEvent() {
+  const code = normCode(document.getElementById('codeInput').value);
+  if (!code) { joinMsg = 'Tapez le code donné au briefing.'; render(); return; }
+  if (!st.poste) { joinMsg = 'Choisissez d\'abord votre poste.'; render(); return; }
+  if (!window.FB || !fbUser) { joinMsg = 'Pas de connexion pour le moment : réessayez quand le téléphone a du réseau. En attendant, envoyez votre relevé par message.'; render(); return; }
+  const { fs, doc, getDoc, setDoc, updateDoc } = window.FB;
+  joinBusy = true; joinMsg = 'Vérification du code…'; render();
   try {
-    const user = await window.claude.use('user');
-    const w = user && user.can ? await user.can('data.write') : null;
-    canWrite = w !== false;
-  } catch (e) { canWrite = true; }
-  db.doc('config/current').onSnapshot(snap => {
-    cfg = snap.exists ? snap.data() : null;
+    const ev = await getDoc(doc(fs, 'events', code));
+    if (!ev.exists()) { joinMsg = `Code « ${code} » inconnu : vérifiez-le auprès du PC course.`; return; }
+    const dref = doc(fs, 'events', code, 'devices', fbUser.uid), now = new Date().toISOString();
+    const d = await getDoc(dref).catch(() => null);
+    if (d && d.exists()) await updateDoc(dref, { poste: st.poste, who: clean(st.who), seenAt: now });
+    else await setDoc(dref, { uid: fbUser.uid, poste: st.poste, who: clean(st.who), status: 'pending', at: now, seenAt: now });
+    st.live = { code, name: (ev.data() || {}).name || '' }; persist();
+    document.getElementById('codeInput').value = '';
+    joinMsg = '';
     subscribeLive();
+  } catch (e) {
+    joinMsg = e && e.code === 'unavailable' ? 'Pas de réseau : réessayez dans un instant.' : 'Impossible de rejoindre l\'épreuve (' + ((e && e.code) || 'erreur') + ').';
+  } finally { joinBusy = false; render(); }
+}
+function askLeave() { document.getElementById('leaveZone').innerHTML = `<span class="small">Quitter l'épreuve ${esc(st.live.code)} ?</span> <button class="linkbtn danger" onclick="leaveEvent()">Quitter</button><button class="linkbtn" onclick="document.getElementById('leaveZone').innerHTML='';render()">Rester</button>`; }
+function leaveEvent() { st.live = null; persist(); subscribeLive(); render(); }
+function subscribeLive() {
+  const code = window.FB && fbUser && st.live ? st.live.code : null;
+  if (code === liveSubCode) return;
+  liveSubs.forEach(u => { try { u(); } catch (e) {} });
+  liveSubs = []; liveSubCode = code; devStatus = null; cfg = null;
+  if (!code) return;
+  const { fs, doc, onSnapshot } = window.FB;
+  liveSubs.push(onSnapshot(doc(fs, 'events', code, 'devices', fbUser.uid), snap => {
+    devStatus = snap.exists() ? snap.data().status : 'gone';
+    render(); if (devStatus === 'ok') flush();
+  }, () => {}));
+  liveSubs.push(onSnapshot(doc(fs, 'events', code), snap => {
+    cfg = snap.exists() ? snap.data() : null;
     if (cfg && cfg.heat && HEATS.includes(cfg.heat) && cfg.heatAt && cfg.heatAt !== st.heatAt) { st.heat = cfg.heat; st.heatAt = cfg.heatAt; persist(); }
     render();
-  }, () => {});
-  render();
-  flush();
+  }, () => {}));
+  liveSubs.push(onSnapshot(doc(fs, 'events', code, 'public', 'list'), snap => {
+    if (!snap.exists()) return;
+    const d = snap.data() || {};
+    const pilots = (Array.isArray(d.pilots) ? d.pilots : []).map(p => ({ o: String(p.o || ''), n: String(p.n || ''), name: String(p.name || ''), veh: String(p.veh || ''), g: p.g === 'F' ? 'F' : 'H' }));
+    if (!pilots.length) return;
+    if (st.list && st.list.ev === code && JSON.stringify(st.list.pilots) === JSON.stringify(pilots)) return;
+    st.list = { ev: code, name: String(d.name || ''), date: String(d.date || ''), pilots, at: String(d.at || '') }; persist(); render();
+  }, () => {}));
 }
-function subscribeLive() {
-  const code = curCode();
-  if (unsubLive && unsubLive.code === code) return;
-  if (unsubLive) unsubLive();
-  if (unsubRep) unsubRep();
-  const u = db.collection('events/' + code + '/infr').onSnapshot(snap => { live = snap.docs.map(d => d.data()); render(); }, () => {});
-  unsubRep = db.collection('events/' + code + '/reports').onSnapshot(snap => { liveRep = snap.docs.map(d => d.data()); render(); }, () => {});
-  unsubLive = u; unsubLive.code = code;
+function pushDevice() {
+  if (!window.FB || !fbUser || !st.live) return;
+  clearTimeout(devTimer);
+  devTimer = setTimeout(() => {
+    const { fs, doc, updateDoc } = window.FB;
+    updateDoc(doc(fs, 'events', st.live.code, 'devices', fbUser.uid), { poste: st.poste, who: clean(st.who), seenAt: new Date().toISOString() }).catch(() => {});
+  }, 800);
 }
-async function flush() {
-  if (!db || !canWrite) return;
-  const pending = st.entries.filter(e => e.syncedStatus !== e.status);
-  for (const e of pending) {
-    try {
-      await db.collection('events/' + e.code + '/infr').doc(e.id).set({ id: e.id, poste: e.poste, who: e.who || '', heat: e.heat, bib: e.bib, type: e.type, at: e.at, status: e.status, code: e.code });
-      e.syncedStatus = e.status; persist();
-    } catch (err) {
-      if (err && err.code === 'invalid_argument') { canWrite = false; break; }
-      break;   // réseau : on réessaiera plus tard
-    }
+// Envoi des saisies : chaque écriture est mise en file par Firebase et part dès que le réseau le permet
+function flush() {
+  liveFlags();
+  if (!canWrite) return;
+  const code = st.live.code, { fs, doc, setDoc } = window.FB;
+  for (const e of st.entries) {
+    if (e.code !== code || e.syncedStatus === e.status) continue;
+    const k = e.id + ':' + e.status; if (inflight.has(k)) continue; inflight.add(k);
+    const status = e.status;
+    setDoc(doc(fs, 'events', code, 'infr', e.id), { id: e.id, poste: e.poste, who: e.who || '', heat: e.heat, bib: e.bib, type: e.type, at: e.at, status, code, uid: fbUser.uid })
+      .then(() => { e.syncedStatus = status; persist(); renderLog(); renderMsg(); }).catch(() => {}).finally(() => inflight.delete(k));
   }
-  for (const r of st.reports.filter(r => !r.synced)) {
-    try { await db.collection('events/' + r.code + '/reports').doc(r.id).set({ id: r.id, poste: r.poste, who: r.who, heat: r.heat, count: r.count, at: r.at, code: r.code }); r.synced = true; persist(); }
-    catch (err) { break; }
+  for (const r of st.reports) {
+    if (r.code !== code || r.synced) continue;
+    const k = r.id; if (inflight.has(k)) continue; inflight.add(k);
+    setDoc(doc(fs, 'events', code, 'reports', r.id), { id: r.id, poste: r.poste, who: r.who || '', heat: r.heat, count: r.count, at: r.at, code, uid: fbUser.uid })
+      .then(() => { r.synced = true; persist(); renderMsg(); }).catch(() => {}).finally(() => inflight.delete(k));
   }
-  render();
-  clearTimeout(retryTimer);
-  if (canWrite && (st.entries.some(e => e.syncedStatus !== e.status) || st.reports.some(r => !r.synced))) retryTimer = setTimeout(flush, 20000);
 }
 window.addEventListener('online', () => flush());
 
@@ -433,8 +481,8 @@ function renderPick() {
 
 /* ---------------- Saisie ---------------- */
 function setTab(t) { tab = t; render(); }
-function setPoste(v) { st.poste = v; persist(); render(); }
-function setWho(v) { st.who = v; persist(); renderMsg(); }
+function setPoste(v) { st.poste = v; persist(); pushDevice(); render(); }
+function setWho(v) { st.who = v; persist(); pushDevice(); renderMsg(); }
 function setHeat(h) { st.heat = h; persist(); render(); }
 function key(k) {
   if (k === '⌫') bib = bib.slice(0, -1);
@@ -475,7 +523,7 @@ function closeReport() {
   const r = { id: 'r' + st.poste + st.heat + Date.now().toString(36).slice(-6), code: curCode(), heat: st.heat, poste: st.poste, who: clean(st.who), count, at: isoLocal(new Date()), synced: false };
   st.reports = st.reports.filter(x => !(x.code === r.code && x.heat === r.heat && x.poste === r.poste));
   st.reports.push(r); persist(); render(); flush();
-  showInfo(`Relevé ${heatLabel(r.heat)} clôturé : ${count ? count + ' infraction(s)' : 'rien à signaler'}. Envoyez-le au chrono.`);
+  showInfo(`Relevé ${heatLabel(r.heat)} clôturé : ${count ? count + ' infraction(s)' : 'rien à signaler'}. ${canWrite ? 'Il part tout seul au PC course.' : 'Envoyez-le au PC course.'}`);
 }
 function askClear() {
   document.getElementById('clearZone').innerHTML = `<span class="small">Effacer tout le relevé de ce téléphone ?</span> <button class="linkbtn danger" onclick="doClear()">Oui, effacer</button> <button class="linkbtn" onclick="render()">Non</button>`;
@@ -555,10 +603,21 @@ function newEvent() {
 /* ---------------- Rendu ---------------- */
 function render() {
   document.getElementById('hdrPoste').textContent = st.poste || '—';
+  liveFlags();
   const pill = document.getElementById('modePill');
-  const isLive = !!db && canWrite;
-  pill.className = 'pill ' + (isLive ? 'live' : 'off');
-  pill.textContent = isLive ? 'En direct' : 'Envoi par message';
+  pill.hidden = !st.live;
+  pill.className = 'pill ' + (canWrite ? 'live' : 'off');
+  pill.textContent = canWrite ? 'En direct' : db ? 'En attente' : 'Hors ligne';
+  // épreuve rejointe ou non
+  document.getElementById('joinBox').hidden = !!st.live;
+  const jb = document.getElementById('joinedBox');
+  jb.hidden = !st.live;
+  if (st.live) {
+    const stt = !window.FB || !fbUser ? ['Hors ligne : saisies gardées sur le téléphone', 'wait'] : devStatus === 'ok' ? ['✔ Poste validé : envoi automatique', 'ok'] : devStatus === 'refused' ? ['✕ Refusé par le PC course', 'ko'] : devStatus === 'gone' ? ['Téléphone retiré de l\'épreuve', 'ko'] : devStatus === 'pending' ? ['⏳ En attente de validation par le PC course', 'wait'] : ['Connexion…', 'wait'];
+    if (!document.getElementById('leaveZone') || !document.getElementById('leaveZone').querySelector('.danger'))
+      jb.innerHTML = `<span class="st ${stt[1]}">${stt[0]}</span><span class="small">Épreuve <b>${esc(st.live.code)}</b>${(cfg && cfg.name) || st.live.name ? ' · ' + esc((cfg && cfg.name) || st.live.name) : ''}</span><span id="leaveZone"><button class="linkbtn" onclick="askLeave()">Quitter l'épreuve</button></span>`;
+  } else jb.innerHTML = '';
+  document.getElementById('joinBtn').disabled = joinBusy;
   document.getElementById('tabSaisie').setAttribute('aria-selected', tab === 'saisie');
   document.getElementById('tabChrono').setAttribute('aria-selected', tab === 'chrono');
   document.getElementById('viewSaisie').hidden = tab !== 'saisie';
@@ -566,7 +625,7 @@ function render() {
   document.getElementById('wrap').classList.toggle('wide', tab === 'chrono');
   document.getElementById('posteSel').value = st.poste;
   const w = document.getElementById('whoInput'); if (document.activeElement !== w) w.value = st.who;
-  document.getElementById('eventLine').textContent = cfg && cfg.name ? `Épreuve : ${cfg.name}` : (st.poste ? '' : 'Choisissez votre poste pour commencer.');
+  document.getElementById('eventLine').textContent = joinMsg && !st.live ? joinMsg : (st.poste ? '' : 'Choisissez votre poste, indiquez votre nom, puis tapez le code de l\'épreuve donné au briefing.');
   // manches
   const ann = cfg && cfg.heat;
   document.getElementById('heats').innerHTML = HEATS.map(h => `<button aria-pressed="${h === st.heat}" onclick="setHeat('${h}')">${heatLabel(h).replace('Essai 2', 'Ess. 2')}${ann === h ? '<span class="ann">chrono</span>' : ''}</button>`).join('');
@@ -591,7 +650,7 @@ function renderLog() {
   const list = st.entries.slice().reverse();
   document.getElementById('logCount').textContent = `${st.entries.filter(e => e.status === 'ok').length} infraction(s)`;
   document.getElementById('log').innerHTML = list.length ? list.map(e => {
-    const sync = !db || !canWrite ? 'À transmettre par message' : e.syncedStatus === e.status ? '✓ Reçue par le chrono' : '⏳ En attente de réseau';
+    const sync = !db || e.code !== curCode() ? 'À transmettre par message' : devStatus === 'refused' || devStatus === 'gone' ? 'Non envoyée : poste refusé, à transmettre par message' : !canWrite ? '⏳ En attente de validation du poste' : e.syncedStatus === e.status ? '✓ Reçue par le PC course' : '⏳ En attente de réseau';
     const del = e.status === 'x' ? '' : askDel === e.id
       ? `<span><button class="linkbtn danger" onclick="delEntry('${e.id}', true)">Confirmer</button><button class="linkbtn" onclick="askDel=null;renderLog()">Garder</button></span>`
       : `<button class="linkbtn" onclick="delEntry('${e.id}')">Supprimer</button>`;
@@ -605,13 +664,15 @@ function renderMsg() {
   const done = st.reports.find(r => r.code === curCode() && r.heat === st.heat && r.poste === st.poste);
   const n = st.entries.filter(e => e.status === 'ok' && e.heat === st.heat && e.poste === st.poste && e.code === curCode()).length;
   document.getElementById('btnReport').textContent = done ? `Relevé ${heatLabel(st.heat)} clôturé ✓ (recliquer pour mettre à jour)` : `Clôturer mon relevé ${heatLabel(st.heat)} · poste ${st.poste || '?'} (${n ? n + ' infraction(s)' : 'rien à signaler'})`;
-  document.getElementById('reportNote').textContent = 'À la fin de chaque manche, même sans infraction, copiez votre relevé en utilisant le bouton ci-dessous, puis envoyez-le au PC course.';
+  document.getElementById('reportNote').textContent = canWrite
+    ? 'À la fin de chaque manche, même sans infraction, clôturez votre relevé : il part tout seul au PC course. Le message ci-dessous reste disponible en secours.'
+    : 'À la fin de chaque manche, même sans infraction, clôturez votre relevé, copiez-le avec le bouton ci-dessous, puis envoyez-le au PC course.';
   const pend = st.entries.filter(e => e.syncedStatus !== e.status).length;
   document.getElementById('sendState').textContent = db && canWrite ? (pend ? `${pend} en attente de réseau` : '') : `${count} infraction(s) dans le message`;
 
 }
 function renderChrono() {
-  const on = !!db;
+  const on = false;   // écran chrono de l'ancienne version : remplacé par ASAT Chrono
   document.getElementById('chronoOff').hidden = on;
   document.getElementById('chronoOn').hidden = !on;
   if (!on) return;
@@ -632,7 +693,6 @@ function renderChrono() {
 }
 
 render();
-initLive();
 // Partage natif (Viber, Messenger, WhatsApp, SMS…) quand le téléphone le permet
 if (navigator.share) {
   document.getElementById('shBtn').hidden = false;
@@ -640,6 +700,31 @@ if (navigator.share) {
 }
 // Fonctionnement hors ligne
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+
+<!-- Liaison en direct : SDK Firebase (chargé depuis Google, gardé en cache pour le hors réseau) -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+  import { getAuth, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+  import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, updateDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+  const firebaseConfig = {
+    apiKey: "AIzaSyDDvHcuLZSBuvlKf2NYPCY4dPn5-855ab8",
+    authDomain: "asat-chrono.firebaseapp.com",
+    projectId: "asat-chrono",
+    storageBucket: "asat-chrono.firebasestorage.app",
+    messagingSenderId: "29211548916",
+    appId: "1:29211548916:web:656143d60f84710159d2a1"
+  };
+  if (location.protocol === 'https:' || location.hostname === 'localhost') {
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    let fs;
+    try { fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+    catch (e) { fs = initializeFirestore(app, {}); }
+    window.FB = { auth, fs, doc, getDoc, setDoc, updateDoc, onSnapshot, signInAnon: () => signInAnonymously(auth) };
+    onAuthStateChanged(auth, u => window.liveAuthChanged && window.liveAuthChanged(u));
+    window.liveReady && window.liveReady();
+  }
 </script>
 
 </body>
