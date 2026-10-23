@@ -42,7 +42,7 @@
   .flagmark { width: 28px; height: 20px; border-radius: 3px; background: repeating-conic-gradient(var(--fg) 0 25%, var(--bg) 0 50%) 0 0 / 10px 10px; border: 2px solid var(--fg); flex-shrink: 0; }
   .muted { color: var(--muted); }
   .small { font-size: .85rem; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; }
+  .card { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .between { justify-content: space-between; }
   .label { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: .85rem; color: var(--muted); }
@@ -187,7 +187,7 @@
         <div id="joinBox" class="grid" style="gap:6px">
           <label class="label" for="codeInput">Code de l'épreuve</label>
           <div class="row" style="flex-wrap:nowrap">
-            <input id="codeInput" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Ex : TARAVAO-4821" style="flex:1;font-family:var(--f-display);font-weight:700;font-size:1.2rem;letter-spacing:.06em;text-transform:uppercase">
+            <input id="codeInput" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Ex : TARAVAO-4821" style="flex:1;min-width:0;width:0;font-family:var(--f-display);font-weight:700;font-size:1.2rem;letter-spacing:.06em;text-transform:uppercase">
             <button class="btn main" id="joinBtn" onclick="joinEvent()">Rejoindre</button>
           </div>
         </div>
@@ -200,14 +200,14 @@
         <div class="heats" id="heats"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="bibCard">
         <span class="label">N° du pilote</span>
         <div class="split">
           <button class="half" id="halfPad" onclick="setPick('pad')"><span class="hl">Taper n°</span><span id="bibDisplay" class="big empty" aria-live="polite">Tapez le numéro</span></button>
           <button class="half" id="halfList" onclick="setPick('list')"><span class="hl">Choisir pilote</span><span id="pickName" class="nm empty">Ouvrir la liste ›</span></button>
         </div>
         <div id="bibName" class="bibname muted"></div>
-        <div class="zone">
+        <div class="zone" id="zone">
           <div class="pad" id="pad"></div>
           <div class="tiles" id="tiles" hidden></div>
           <div class="loadzone" id="loadZone" hidden>
@@ -455,8 +455,18 @@ function splitName(full) {
   const last = w.filter(up), first = w.filter(x => !up(x));
   return last.length && first.length ? { last: last.join(' '), first: first.join(' ') } : { last: w[0] || '', first: w.slice(1).join(' ') };
 }
-function setPick(m) { st.pick = m; loadOpen = m === 'list' && !st.list; persist(); render(); }
-function pickPilot(n) { bib = String(n); render(); }
+// Zone clavier / pavé : elle se replie dès qu'un pilote est choisi, pour laisser les boutons d'infraction à portée de pouce ;
+// on la rouvre en touchant « Taper n° » ou « Choisir pilote ». Après une saisie, elle se rouvre pour le pilote suivant.
+let zoneOpen = true;
+function alignBibCard() {
+  const c = document.getElementById('bibCard'), h = document.querySelector('header.top');
+  if (!c) return;
+  const y = c.getBoundingClientRect().top + window.scrollY - (h ? h.getBoundingClientRect().height : 0) - 6;
+  window.scrollTo({ top: Math.max(0, y), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+function collapseZone() { zoneOpen = false; render(); alignBibCard(); }
+function setPick(m) { st.pick = m; loadOpen = m === 'list' && !st.list; zoneOpen = true; persist(); render(); }
+function pickPilot(n) { bib = String(n); collapseZone(); }
 function renderPick() {
   const l = st.list, list = st.pick === 'list';
   document.getElementById('halfPad').setAttribute('aria-pressed', !list);
@@ -465,6 +475,7 @@ function renderPick() {
   if (pl) { const sn = splitName(pl.name); nm.innerHTML = `${esc(sn.first)}<br>${esc(sn.last)}`; nm.className = 'nm ' + (pl.g === 'F' ? 'f' : 'm'); }
   else { nm.textContent = bib && l ? 'n° absent de la liste' : l ? 'Ouvrir la liste ›' : 'Charger la liste ›'; nm.className = 'nm empty'; }
   const showLoad = list && (loadOpen || !l);
+  document.getElementById('zone').hidden = !zoneOpen && !!bib && !showLoad;
   document.getElementById('pad').hidden = list;
   document.getElementById('tiles').hidden = !list || showLoad;
   document.getElementById('loadZone').hidden = !showLoad;
@@ -488,13 +499,15 @@ function key(k) {
   if (k === '⌫') bib = bib.slice(0, -1);
   else if (k === 'C') bib = '';
   else if (bib.length < 3) bib = (bib + k).replace(/^0+/, '');
+  // numéro complet et sans ambiguïté dans la liste (aucun autre n° ne commence pareil) : on replie le clavier
+  if (bib && st.list && pilotByBib(bib) && !st.list.pilots.some(p => p.n !== bib && p.n.startsWith(bib))) { collapseZone(); return; }
   renderBib();
 }
 function record(type) {
   if (!bib || !st.poste) return;
   const e = { id: newId(), code: curCode(), heat: st.heat, bib, type, poste: st.poste, who: clean(st.who), at: isoLocal(new Date()), status: 'ok', syncedStatus: null };
   st.entries.push(e); persist();
-  bib = ''; render();
+  bib = ''; zoneOpen = true; render();
   showToast(`${heatLabel(e.heat)} · n° ${e.bib} · ${TYPES[type].short}`, e.id);
   flush();
 }
@@ -643,7 +656,7 @@ function renderBib() {
   el.classList.toggle('empty', !bib);
   for (const id of ['btnP', 'btnD', 'btnE']) document.getElementById(id).disabled = !bib || !st.poste;
   const pl = bib ? pilotByBib(bib) : null;
-  document.getElementById('bibName').textContent = bib ? `${heatLabel(st.heat)} · poste ${st.poste || '?'}` + (pl ? ' · ordre ' + pl.o : '') : '\u00a0';
+  document.getElementById('bibName').textContent = bib ? `${heatLabel(st.heat)} · poste ${st.poste || '?'}` + (pl ? ' · ordre ' + pl.o : '') + (!zoneOpen ? ' · touchez Taper n° ou Choisir pilote pour changer' : '') : '\u00a0';
   renderPick();
 }
 function renderLog() {
@@ -715,7 +728,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
     messagingSenderId: "29211548916",
     appId: "1:29211548916:web:656143d60f84710159d2a1"
   };
-  if (location.protocol === 'https:' || location.hostname === 'localhost') {
+  if (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     let fs;
