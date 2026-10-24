@@ -1,7 +1,7 @@
 // Poste commissaire ASAT — mise en cache pour fonctionner sans réseau.
 // Changer VERSION à chaque mise à jour de la page pour que les téléphones la récupèrent.
-const VERSION = 'poste-asat-v7';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+const VERSION = 'poste-asat-v8';
+const FILES = ['./', './index.html', './manifest.webmanifest', './dc.html', './dc.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -21,6 +21,6 @@ self.addEventListener('fetch', e => {
     fetch(e.request).then(r => {
       if (r.ok) { const copy = r.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)).catch(() => {}); }
       return r;
-    }).catch(() => caches.match(e.request).then(m => m || (mine ? caches.match('./index.html') : Response.error())))
+    }).catch(() => caches.match(e.request).then(m => m || (mine ? caches.match(url.pathname.endsWith('dc.html') ? './dc.html' : './index.html') : Response.error())))
   );
 });
