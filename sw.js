@@ -1,6 +1,6 @@
 // Poste commissaire ASAT — mise en cache pour fonctionner sans réseau.
 // Changer VERSION à chaque mise à jour de la page pour que les téléphones la récupèrent.
-const VERSION = 'poste-asat-v8';
+const VERSION = 'poste-asat-v10';
 const FILES = ['./', './index.html', './manifest.webmanifest', './dc.html', './dc.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

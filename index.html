@@ -403,9 +403,12 @@ function subscribeLive() {
   liveSubs.forEach(u => { try { u(); } catch (e) {} });
   liveSubs = []; liveSubCode = code; devStatus = null; cfg = null; trk.data = null; trk.key = '';
   if (!code) return;
+  let autoAsk = false;
   const { fs, doc, onSnapshot } = window.FB;
   liveSubs.push(onSnapshot(doc(fs, 'events', code, 'devices', fbUser.uid), snap => {
     devStatus = snap.exists() ? snap.data().status : 'gone';
+    // déclaration absente (nouvelle identité du téléphone après mise à jour) : nouvelle demande, à accepter par le PC course
+    if (!snap.exists() && !snap.metadata.fromCache && !autoAsk) { autoAsk = true; const now = new Date().toISOString(); window.FB.setDoc(window.FB.doc(window.FB.fs, 'events', code, 'devices', fbUser.uid), { uid: fbUser.uid, poste: st.poste, who: clean(st.who), status: 'pending', at: now, seenAt: now }).catch(() => {}); }
     render(); if (devStatus === 'ok') flush();
   }, () => {}));
   liveSubs.push(onSnapshot(doc(fs, 'events', code), snap => {
@@ -795,7 +798,8 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
     appId: "1:29211548916:web:656143d60f84710159d2a1"
   };
   if (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    const app = initializeApp(firebaseConfig);
+    // nom d'application propre à cette page : identité anonyme séparée de celle d'ASAT Chrono et de l'autre page (même site)
+    const app = initializeApp(firebaseConfig, 'poste-asat');
     const auth = getAuth(app);
     let fs;
     try { fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }

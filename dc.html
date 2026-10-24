@@ -127,6 +127,7 @@
 
   label { display: grid; gap: 4px; font-weight: 700; font-size: .9rem; }
   input[type=text] { width: 100%; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 1.1rem; }
+  select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 1.05rem; color: inherit; font: inherit; }
   input#code { font-family: var(--f-num); text-transform: uppercase; letter-spacing: .06em; }
   .btn { padding: 11px 14px; border-radius: 10px; background: var(--flag); color: var(--flag-ink); font-weight: 800; font-size: 1rem; }
   .btn[disabled] { opacity: .6; }
@@ -152,6 +153,8 @@ if (!['pass', 'rank', 'pen'].includes(S.view)) S.view = 'pass';
 if (!['T', 'H', 'F'].includes(S.gf)) S.gf = 'T';
 function persist() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} }
 
+const FN = { dc: 'Directeur de course', dcs: 'DC stagiaire', cs: 'Collège des commissaires sportifs' };
+if (!FN[S.fn]) S.fn = 'dc';
 const TYPES = { P: { sec: 2, label: 'Plot de chicane' }, D: { sec: 5, label: 'Plot de demi-tour' }, E: { sec: 0, label: 'Erreur de parcours' } };
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = n => String(n).padStart(2, '0');
@@ -169,6 +172,7 @@ window.liveReady = () => { window.FB.signInAnon().catch(() => { joinMsg = 'Conne
 window.liveAuthChanged = u => { fbUser = u || null; subscribe(); render(); };
 
 async function join() {
+  const fn = FN[document.getElementById('fn').value] ? document.getElementById('fn').value : 'dc';
   const code = normCode(document.getElementById('code').value), who = String(document.getElementById('who').value || '').replace(/[|\r\n]/g, ' ').trim();
   if (!code) { joinMsg = 'Tapez le code de l\'épreuve donné par le PC course.'; render(); return; }
   if (!window.FB || !fbUser) { joinMsg = 'Pas de connexion pour le moment : réessayez quand le téléphone a du réseau.'; render(); return; }
@@ -179,9 +183,9 @@ async function join() {
     if (!ev.exists()) { joinMsg = `Code « ${code} » inconnu : vérifiez-le auprès du PC course.`; return; }
     const dref = doc(fs, 'events', code, 'devices', fbUser.uid), now = new Date().toISOString();
     const d = await getDoc(dref).catch(() => null);
-    if (d && d.exists()) await updateDoc(dref, { poste: 'DC', role: 'dc', who, seenAt: now });
-    else await setDoc(dref, { uid: fbUser.uid, poste: 'DC', role: 'dc', who, status: 'pending', at: now, seenAt: now });
-    S.code = code; S.who = who; S.name = (ev.data() || {}).name || ''; persist();
+    if (d && d.exists()) await updateDoc(dref, { poste: 'DC', role: 'dc', fn, who, seenAt: now });
+    else await setDoc(dref, { uid: fbUser.uid, poste: 'DC', role: 'dc', fn, who, status: 'pending', at: now, seenAt: now });
+    S.code = code; S.who = who; S.fn = fn; S.name = (ev.data() || {}).name || ''; persist();
     joinMsg = ''; subscribe();
   } catch (e) {
     joinMsg = e && e.code === 'unavailable' ? 'Pas de réseau : réessayez dans un instant.' : 'Impossible de rejoindre l\'épreuve (' + ((e && e.code) || 'erreur') + ').';
@@ -196,9 +200,12 @@ function subscribe() {
   if (boardSub) { try { boardSub(); } catch (e) {} boardSub = null; }
   subCode = code; devStatus = null; B = null; trk = null;
   if (!code) return;
+  let autoAsk = false;
   const { fs, doc, onSnapshot } = window.FB;
   subs.push(onSnapshot(doc(fs, 'events', code, 'devices', fbUser.uid), snap => {
     devStatus = snap.exists() ? snap.data().status : 'gone';
+    // déclaration absente (nouvelle identité du téléphone après mise à jour) : nouvelle demande, à accepter par le PC course
+    if (!snap.exists() && !snap.metadata.fromCache && !autoAsk) { autoAsk = true; const now = new Date().toISOString(); window.FB.setDoc(window.FB.doc(window.FB.fs, 'events', code, 'devices', fbUser.uid), { uid: fbUser.uid, poste: 'DC', role: 'dc', fn: S.fn, who: S.who, status: 'pending', at: now, seenAt: now }).catch(() => {}); }
     if (devStatus === 'ok') subBoard(); else if (boardSub && devStatus !== 'ok' && !snap.metadata.fromCache) { boardSub(); boardSub = null; B = null; }
     render();
   }, () => {}));
@@ -322,12 +329,13 @@ function repsHTML() {
     + '</tbody></table></div>';
 }
 function footHTML() {
-  return `<div class="foot"><span>Mise à jour automatique depuis le PC course · ${esc(S.code)}${S.who ? ' · ' + esc(S.who) : ''}</span><button class="linkbtn" onclick="leave()">Quitter l'épreuve</button></div>`;
+  return `<div class="foot"><span>Mise à jour automatique depuis le PC course · ${esc(S.code)} · ${esc(FN[S.fn])}${S.who ? ' · ' + esc(S.who) : ''}</span><button class="linkbtn" onclick="leave()">Quitter l'épreuve</button></div>`;
 }
 
 function render() {
   const app = document.getElementById('app'), sc = app.querySelector('.scroll'), y = sc ? sc.scrollTop : 0, x = sc && sc.querySelector('.tw') ? sc.querySelector('.tw').scrollLeft : 0;
-  const ae = document.activeElement, keep = ae && (ae.id === 'code' || ae.id === 'who') ? { id: ae.id, v: ae.value, s: ae.selectionStart } : null;
+  const vals = {}; for (const id of ['code', 'who', 'fn']) { const el = document.getElementById(id); vals[id] = el ? el.value : null; }
+  const ae = document.activeElement, keep = ae && (ae.id === 'code' || ae.id === 'who' || ae.id === 'fn') ? { id: ae.id, v: ae.value, s: ae.selectionStart } : null;
   {
     if (!S.code) {
       app.className = 'form';
@@ -335,10 +343,12 @@ function render() {
         <h3 style="font-size:1.2rem;text-transform:uppercase">Rejoindre l'épreuve</h3>
         <p class="hint">Écran du Directeur de course : temps, classement et pénalités en direct, sans aucune modification possible. Le PC course doit accepter ce téléphone.</p>
         <label>Code de l'épreuve<input type="text" id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ex. TIAREI-3813"></label>
-        <label>Votre nom<input type="text" id="who" autocomplete="name" value="${esc(S.who)}" placeholder="ex. Directeur de course"></label>
+        <label>Votre fonction<select id="fn">${Object.entries(FN).map(([k, v]) => `<option value="${k}" ${S.fn === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label>Votre nom<input type="text" id="who" autocomplete="name" value="${esc(S.who)}" placeholder="ex. Teva Mauri"></label>
         <button class="btn" onclick="join()" ${joinBusy ? 'disabled' : ''}>Rejoindre</button>
         <div class="msg">${esc(joinMsg)}</div></div>`;
-      if (keep) { const el = document.getElementById(keep.id); el.value = keep.v; el.focus(); try { el.setSelectionRange(keep.s, keep.s); } catch (e) {} }
+      for (const id in vals) { const el = document.getElementById(id); if (el && vals[id] !== null) el.value = vals[id]; }
+      if (keep) { const el = document.getElementById(keep.id); el.focus(); try { el.setSelectionRange(keep.s, keep.s); } catch (e) {} }
       return;
     }
   }
@@ -362,7 +372,7 @@ async function rejoin() {
   if (!window.FB || !fbUser || !S.code) return;
   const { fs, doc, setDoc, deleteDoc } = window.FB, now = new Date().toISOString();
   // le statut ne peut pas être changé par le téléphone : on redemande en créant une nouvelle déclaration si elle a été supprimée
-  if (devStatus === 'gone') await setDoc(doc(fs, 'events', S.code, 'devices', fbUser.uid), { uid: fbUser.uid, poste: 'DC', role: 'dc', who: S.who, status: 'pending', at: now, seenAt: now }).catch(() => {});
+  if (devStatus === 'gone') await setDoc(doc(fs, 'events', S.code, 'devices', fbUser.uid), { uid: fbUser.uid, poste: 'DC', role: 'dc', fn: S.fn, who: S.who, status: 'pending', at: now, seenAt: now }).catch(() => {});
   else alert('Le PC course doit retirer le refus : dans ASAT Chrono, touchez « Accepter » sur la ligne « Directeur de course ».');
 }
 function setGf(v) { S.gf = v; persist(); render(); }
@@ -388,7 +398,8 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
     appId: "1:29211548916:web:656143d60f84710159d2a1"
   };
   if (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    const app = initializeApp(firebaseConfig);
+    // nom d'application propre à cette page : identité anonyme séparée de celle d'ASAT Chrono et de l'autre page (même site)
+    const app = initializeApp(firebaseConfig, 'asat-dc');
     const auth = getAuth(app);
     let fs;
     try { fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
