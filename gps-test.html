@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ASAT · Test GPS</title>
+<meta name="theme-color" content="#1f5fae">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+  /* Page de test autonome (aucun envoi) : enregistre les positions GPS du téléphone, les trace et mesure leur qualité. */
+  :root {
+    --bg: #e9f4f5; --surface: #ffffff; --surface-2: #d8ebee; --fg: #0e2a47; --muted: #4a6274; --line: #bcd7dc;
+    --flag: #1f5fae; --flag-ink: #ffffff; --ok: #1e7a46; --ok-bg: #d7f0e0; --warn: #b35c00; --warn-bg: #fff1dc; --ko: #b91c1c; --ko-bg: #fde2e2;
+    --trace: #1f5fae; --good: #2b8a3e; --mid: #e8a10a; --bad: #d6336c;
+    --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+    --f-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-num: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root {
+    --bg: #0b1824; --surface: #12232f; --surface-2: #1b3140; --fg: #eaf4f6; --muted: #9fb6c2; --line: #2a4252;
+    --flag: #5b9bf0; --flag-ink: #06121f; --ok: #6ee7a8; --ok-bg: #143b2a; --warn: #ffc56b; --warn-bg: #3a2a10; --ko: #ff8787; --ko-bg: #3b1416;
+    --trace: #7fb0f7; --good: #6ee7a8; --mid: #ffd43b; --bad: #f783ac; color-scheme: dark } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body);
+         padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+  main { max-width: 640px; margin: 0 auto; display: grid; gap: 10px; }
+  h1 { font-family: var(--f-display); font-size: 1.5rem; font-weight: 800; text-transform: uppercase; margin: 0; letter-spacing: .02em; display: flex; align-items: center; gap: 8px; }
+  .flagmark { width: 24px; height: 17px; border-radius: 3px; background: repeating-conic-gradient(var(--fg) 0 25%, var(--bg) 0 50%) 0 0 / 8px 8px; border: 2px solid var(--fg); flex-shrink: 0; }
+  p { margin: 0; }
+  .hint { color: var(--muted); font-size: .86rem; }
+  button { font: inherit; color: inherit; border: 0; cursor: pointer; background: none; }
+  :focus-visible { outline: 3px solid var(--flag); outline-offset: 2px; }
+  .go { width: 100%; padding: 16px; border-radius: 14px; background: var(--flag); color: var(--flag-ink); font-family: var(--f-display); font-size: 1.5rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+  .go.stop { background: var(--ko); color: #fff; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sm { padding: 9px 12px; border-radius: 10px; background: var(--surface-2); font-weight: 700; font-size: .9rem; }
+  .sm[disabled] { opacity: .5; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; }
+  .flags { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .flag { border-radius: 10px; padding: 7px 9px; font-size: .84rem; font-weight: 700; background: var(--surface-2); color: var(--muted); }
+  .flag.ok { background: var(--ok-bg); color: var(--ok); } .flag.warn { background: var(--warn-bg); color: var(--warn); } .flag.ko { background: var(--ko-bg); color: var(--ko); }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .st { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px; }
+  .st i { display: block; font-style: normal; font-size: .72rem; color: var(--muted); }
+  .st b { font-family: var(--f-num); font-size: 1.05rem; }
+  .st b small { font-family: var(--f-body); font-size: .72rem; font-weight: 400; color: var(--muted); }
+  .alert { border-radius: 12px; padding: 10px 12px; font-weight: 800; background: var(--ko-bg); color: var(--ko); font-size: 1.05rem; }
+  canvas { width: 100%; aspect-ratio: 1 / 1; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: block; touch-action: none; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: .78rem; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; background: var(--c); vertical-align: -1px; }
+  .log { font-family: var(--f-num); font-size: .76rem; color: var(--muted); max-height: 9em; overflow-y: auto; white-space: pre-wrap; }
+  .sect { font-family: var(--f-display); font-weight: 800; text-transform: uppercase; font-size: 1.05rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1><span class="flagmark" aria-hidden="true"></span>Test GPS</h1>
+  <p class="hint">Page de test : rien n'est envoyé, les positions restent sur ce téléphone. Touchez « Démarrer », autorisez la localisation, posez le téléphone (fixé) et roulez. Ne touchez plus l'écran jusqu'à l'arrêt.</p>
+
+  <button class="go" id="go" onclick="toggle()">Démarrer</button>
+
+  <div class="flags">
+    <div class="flag" id="fGps">GPS : en attente</div>
+    <div class="flag" id="fWake">Écran allumé : en attente</div>
+  </div>
+
+  <div class="alert" id="still" hidden></div>
+
+  <div class="stats">
+    <div class="st"><i>Points</i><b id="sN">0</b></div>
+    <div class="st"><i>Intervalle moyen</i><b id="sDt">–</b></div>
+    <div class="st"><i>Plus grand trou</i><b id="sGap">–</b></div>
+    <div class="st"><i>Précision (médiane)</i><b id="sAcc">–</b></div>
+    <div class="st"><i>Vitesse</i><b id="sV">–</b></div>
+    <div class="st"><i>Distance</i><b id="sD">–</b></div>
+  </div>
+
+  <canvas id="cv" width="900" height="900" aria-label="Tracé enregistré"></canvas>
+  <div class="legend"><span style="--c:var(--good)">précision ≤ 5 m</span><span style="--c:var(--mid)">5 à 15 m</span><span style="--c:var(--bad)">&gt; 15 m</span><span>trait pointillé : trou de plus de 3 s</span></div>
+
+  <div class="row">
+    <button class="sm" id="bCsv" onclick="exportCsv()" disabled>Exporter (CSV)</button>
+    <button class="sm" id="bGpx" onclick="exportGpx()" disabled>Exporter (GPX)</button>
+    <button class="sm" id="bClr" onclick="clearAll()" disabled>Effacer</button>
+  </div>
+
+  <div class="card">
+    <div class="sect">Journal</div>
+    <div class="log" id="log"></div>
+  </div>
+  <p class="hint">Pour tester la mise en veille : pendant l'enregistrement, verrouillez volontairement l'écran 20 s puis rouvrez la page. Le trou apparaîtra dans le tracé et dans le journal.</p>
+</main>
+
+<script>
+const LS = 'asat_gps_test_v1';
+let lastErr = '', pts = [], logLines = [], running = false, watchId = null, wake = null, startAt = 0;
+try { const r = JSON.parse(localStorage.getItem(LS) || 'null'); if (r && Array.isArray(r.pts)) { pts = r.pts; logLines = r.log || []; } } catch (e) {}
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const hms = t => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); };
+function save() { try { localStorage.setItem(LS, JSON.stringify({ pts, log: logLines.slice(-200) })); } catch (e) {} }
+function log(msg) { logLines.push(hms(Date.now()) + '  ' + msg); const el = $('log'); el.textContent = logLines.slice(-200).join('\n'); el.scrollTop = el.scrollHeight; save(); }
+function flag(id, cls, txt) { const el = $(id); el.className = 'flag ' + cls; el.textContent = txt; }
+function fr(v, d) { return v.toFixed(d).replace('.', ','); }
+
+/* ---------- Maintien de l'écran allumé ---------- */
+async function wakeOn() {
+  if (!('wakeLock' in navigator)) { flag('fWake', 'ko', 'Écran allumé : non pris en charge'); log('Maintien de l\'écran non pris en charge par ce navigateur'); return; }
+  try {
+    wake = await navigator.wakeLock.request('screen');
+    flag('fWake', 'ok', 'Écran allumé : oui');
+    wake.addEventListener('release', () => { if (running) { flag('fWake', 'warn', 'Écran allumé : relâché'); log('Maintien de l\'écran relâché'); } });
+  } catch (e) { flag('fWake', 'ko', 'Écran allumé : refusé'); log('Maintien de l\'écran refusé (' + (e.name || 'erreur') + ')'); }
+}
+document.addEventListener('visibilitychange', () => {
+  if (!running) return;
+  if (document.visibilityState === 'visible') { log('Page de nouveau visible'); wakeOn(); }
+  else log('Page masquée (écran verrouillé ou autre application)');
+});
+
+/* ---------- GPS ---------- */
+function toggle() { running ? stop() : start(); }
+function start() {
+  if (!('geolocation' in navigator)) { flag('fGps', 'ko', 'GPS : non disponible'); return; }
+  if (pts.length && !confirm('Effacer l\'enregistrement précédent et recommencer ?')) return;
+  pts = []; logLines = []; running = true; startAt = Date.now();
+  $('go').textContent = 'Arrêter'; $('go').classList.add('stop');
+  log('Démarrage');
+  flag('fGps', 'warn', 'GPS : recherche…');
+  wakeOn();
+  watchId = navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+  render();
+}
+function stop() {
+  running = false;
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId); watchId = null;
+  if (wake) { wake.release().catch(() => {}); wake = null; }
+  $('go').textContent = 'Démarrer'; $('go').classList.remove('stop');
+  flag('fWake', '', 'Écran allumé : arrêté');
+  log(`Arrêt : ${pts.length} points en ${Math.round((Date.now() - startAt) / 1000)} s`);
+  render();
+}
+function onPos(p) {
+  if (!running) return;
+  const c = p.coords, t = p.timestamp || Date.now();
+  const last = pts[pts.length - 1];
+  if (last && t <= last.t) return;            // doublon
+  const pt = { t, rx: Date.now(), lat: c.latitude, lon: c.longitude, acc: c.accuracy, v: Number.isFinite(c.speed) && c.speed !== null ? c.speed : null, h: Number.isFinite(c.heading) ? c.heading : null };
+  if (last && t - last.t > 3000) log(`Trou de ${fr((t - last.t) / 1000, 1)} s dans les positions`);
+  pts.push(pt); if (lastErr) { log('GPS : positions de nouveau reçues'); lastErr = ''; }
+  flag('fGps', pt.acc <= 15 ? 'ok' : 'warn', `GPS : ± ${Math.round(pt.acc)} m`);
+  if (pts.length === 1) log(`Première position (± ${Math.round(pt.acc)} m)`);
+  save(); render();
+}
+function onErr(e) {
+  const lp = pts[pts.length - 1];
+  if (e.code !== 1 && lp && Date.now() - lp.rx < 5000) return;   // erreur passagère : des positions arrivent encore
+  const m = { 1: 'refusé : autorisez la localisation pour ce site', 2: 'position indisponible', 3: 'délai dépassé' }[e.code] || 'erreur';
+  flag('fGps', e.code === 1 ? 'ko' : 'warn', 'GPS : ' + m);
+  if (m !== lastErr) log('GPS : ' + m);   // une seule ligne tant que l'erreur se répète
+  lastErr = m;
+  if (e.code === 1) stop();
+}
+
+/* ---------- Calculs ---------- */
+const R = 6371000;
+function dist(a, b) {
+  const la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180, dla = la2 - la1, dlo = (b.lon - a.lon) * Math.PI / 180;
+  const h = Math.sin(dla / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dlo / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function speedAt(i) {   // vitesse donnée par le téléphone, sinon calculée sur les derniers points
+  const p = pts[i]; if (p.v !== null && p.v >= 0) return p.v;
+  let j = i; while (j > 0 && p.t - pts[j - 1].t < 4000) j--;
+  if (j === i) return null;
+  let d = 0; for (let k = j; k < i; k++) d += dist(pts[k], pts[k + 1]);
+  return d / ((p.t - pts[j].t) / 1000);
+}
+function stats() {
+  const n = pts.length, out = { n };
+  if (n < 2) return out;
+  let gap = 0, d = 0;
+  for (let i = 1; i < n; i++) { gap = Math.max(gap, pts[i].t - pts[i - 1].t); d += dist(pts[i - 1], pts[i]); }
+  out.dt = (pts[n - 1].t - pts[0].t) / (n - 1) / 1000; out.gap = gap / 1000; out.d = d;
+  const acc = pts.map(p => p.acc).sort((a, b) => a - b); out.acc = acc[Math.floor(n / 2)];
+  out.v = speedAt(n - 1);
+  // immobilité : position restée dans un rayon de 8 m depuis combien de secondes
+  const lastP = pts[n - 1]; let k = n - 1;
+  while (k > 0 && dist(pts[k - 1], lastP) < Math.max(8, lastP.acc)) k--;
+  out.still = (lastP.t - pts[k].t) / 1000;
+  return out;
+}
+
+/* ---------- Affichage ---------- */
+function render() {
+  const s = stats();
+  $('sN').textContent = s.n;
+  $('sDt').innerHTML = s.dt ? fr(s.dt, 2) + ' <small>s</small>' : '–';
+  $('sGap').innerHTML = s.gap ? fr(s.gap, 1) + ' <small>s</small>' : '–';
+  $('sAcc').innerHTML = s.acc ? Math.round(s.acc) + ' <small>m</small>' : (pts[0] ? Math.round(pts[0].acc) + ' <small>m</small>' : '–');
+  $('sV').innerHTML = s.v !== undefined && s.v !== null ? Math.round(s.v * 3.6) + ' <small>km/h</small>' : '–';
+  $('sD').innerHTML = s.d ? (s.d < 1000 ? Math.round(s.d) + ' <small>m</small>' : fr(s.d / 1000, 2) + ' <small>km</small>') : '–';
+  const st = $('still');
+  st.hidden = !(running && s.still >= 10);
+  if (!st.hidden) st.textContent = `⚠ Immobile depuis ${Math.round(s.still)} s (alerte qui serait envoyée au DC)`;
+  for (const id of ['bCsv', 'bGpx', 'bClr']) $(id).disabled = running || !pts.length;
+  draw();
+}
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function draw() {
+  const cv = $('cv'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H);
+  g.font = '26px system-ui, sans-serif';
+  if (!pts.length) { g.fillStyle = css('--muted'); g.textAlign = 'center'; g.fillText('Le tracé apparaîtra ici', W / 2, H / 2); return; }
+  const lat0 = pts[0].lat, k = Math.cos(lat0 * Math.PI / 180);
+  const xy = pts.map(p => [(p.lon - pts[0].lon) * k * 111320, (p.lat - lat0) * 110540]);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of xy) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const span = Math.max(x1 - x0, y1 - y0, 40), M = 50, sc = (W - 2 * M) / span;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const P = ([x, y]) => [W / 2 + (x - cx) * sc, H / 2 - (y - cy) * sc];
+  // trait
+  g.lineWidth = 4; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = css('--trace');
+  for (let i = 1; i < xy.length; i++) {
+    const a = P(xy[i - 1]), b = P(xy[i]);
+    g.setLineDash(pts[i].t - pts[i - 1].t > 3000 ? [10, 10] : []);
+    g.globalAlpha = .55; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+  }
+  g.setLineDash([]); g.globalAlpha = 1;
+  // points colorés par précision
+  xy.forEach((q, i) => { const [x, y] = P(q), a = pts[i].acc; g.fillStyle = a <= 5 ? css('--good') : a <= 15 ? css('--mid') : css('--bad'); g.beginPath(); g.arc(x, y, 6, 0, 2 * Math.PI); g.fill(); });
+  // dernier point + cercle de précision
+  const [lx, ly] = P(xy[xy.length - 1]), la = pts[pts.length - 1].acc;
+  g.strokeStyle = css('--fg'); g.lineWidth = 2; g.globalAlpha = .35; g.beginPath(); g.arc(lx, ly, Math.max(8, la * sc), 0, 2 * Math.PI); g.stroke(); g.globalAlpha = 1;
+  g.fillStyle = css('--fg'); g.beginPath(); g.arc(lx, ly, 11, 0, 2 * Math.PI); g.fill();
+  // départ
+  const [sx, sy] = P(xy[0]); g.fillStyle = css('--fg'); g.fillRect(sx - 9, sy - 9, 18, 18); const right = sx > W - 140; g.textAlign = right ? 'right' : 'left'; g.fillText('départ', right ? sx - 14 : sx + 14, sy + 8); g.textAlign = 'left';
+  // échelle
+  const nice = [5, 10, 20, 50, 100, 200, 500, 1000, 2000].find(v => v * sc > W / 6) || 2000, bx = M, by = H - 22;
+  g.strokeStyle = css('--fg'); g.lineWidth = 3; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + nice * sc, by); g.moveTo(bx, by - 8); g.lineTo(bx, by + 8); g.moveTo(bx + nice * sc, by - 8); g.lineTo(bx + nice * sc, by + 8); g.stroke();
+  g.fillStyle = css('--fg'); g.fillText(nice >= 1000 ? nice / 1000 + ' km' : nice + ' m', bx + nice * sc + 12, by + 9);
+}
+
+/* ---------- Export ---------- */
+function saveFile(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+function stamp() { const d = new Date(pts[0] ? pts[0].t : Date.now()); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()); }
+function exportCsv() {
+  const rows = ['heure;t_s;latitude;longitude;precision_m;vitesse_kmh;cap_deg;delai_reception_ms'];
+  for (const p of pts) rows.push([hms(p.t), ((p.t - pts[0].t) / 1000).toFixed(3), p.lat.toFixed(7), p.lon.toFixed(7), p.acc.toFixed(1), p.v === null ? '' : (p.v * 3.6).toFixed(1), p.h === null ? '' : p.h.toFixed(0), p.rx - p.t].join(';').replace(/(\d)\.(\d)/g, '$1,$2'));
+  saveFile(`test-gps-${stamp()}.csv`, '﻿' + rows.join('\r\n'), 'text/csv');
+}
+function exportGpx() {
+  const trk = pts.map(p => `<trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><time>${new Date(p.t).toISOString()}</time><hdop>${(p.acc / 5).toFixed(1)}</hdop></trkpt>`).join('\n');
+  saveFile(`test-gps-${stamp()}.gpx`, `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="ASAT test GPS" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Test GPS ${stamp()}</name><trkseg>\n${trk}\n</trkseg></trk></gpx>`, 'application/gpx+xml');
+}
+function clearAll() { if (!confirm('Effacer l\'enregistrement ?')) return; pts = []; logLines = []; save(); $('log').textContent = ''; render(); }
+
+$('log').textContent = logLines.join('\n');
+if (!window.isSecureContext) { flag('fGps', 'ko', 'GPS : page non sécurisée (https requis)'); }
+render();
+setInterval(() => { if (running) render(); }, 1000);
+</script>
+</body>
+</html>
