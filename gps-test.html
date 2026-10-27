@@ -126,7 +126,7 @@ function toggle() { running ? stop() : start(); }
 function start() {
   if (!('geolocation' in navigator)) { flag('fGps', 'ko', 'GPS : non disponible'); return; }
   if (pts.length && !confirm('Effacer l\'enregistrement précédent et recommencer ?')) return;
-  pts = []; logLines = []; running = true; startAt = Date.now();
+  pts = []; logLines = []; lastErr = ''; running = true; startAt = Date.now();
   $('go').textContent = 'Arrêter'; $('go').classList.add('stop');
   log('Démarrage');
   flag('fGps', 'warn', 'GPS : recherche…');
@@ -151,7 +151,8 @@ function onPos(p) {
   const pt = { t, rx: Date.now(), lat: c.latitude, lon: c.longitude, acc: c.accuracy, v: Number.isFinite(c.speed) && c.speed !== null ? c.speed : null, h: Number.isFinite(c.heading) ? c.heading : null };
   if (last && t - last.t > 3000) log(`Trou de ${fr((t - last.t) / 1000, 1)} s dans les positions`);
   pts.push(pt); if (lastErr) { log('GPS : positions de nouveau reçues'); lastErr = ''; }
-  flag('fGps', pt.acc <= 15 ? 'ok' : 'warn', `GPS : ± ${Math.round(pt.acc)} m`);
+  flag('fGps', pt.acc <= 15 ? 'ok' : pt.acc <= 60 ? 'warn' : 'ko', pt.acc <= 60 ? `GPS : ± ${Math.round(pt.acc)} m` : `± ${Math.round(pt.acc)} m : pas encore de GPS (attendez ou vérifiez « position précise »)`);
+  if (pt.acc <= 30 && !pts.slice(0, -1).some(q => q.acc <= 30)) log(`Fix GPS obtenu (± ${Math.round(pt.acc)} m) après ${Math.round((Date.now() - startAt) / 1000)} s`);
   if (pts.length === 1) log(`Première position (± ${Math.round(pt.acc)} m)`);
   save(); render();
 }
