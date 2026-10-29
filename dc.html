@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>ASAT · Directeur de course</title>
+<title>e-DC · Directeur de course</title>
 <meta name="theme-color" content="#1f5fae">
 <link rel="manifest" href="dc.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="ASAT DC">
+<meta name="apple-mobile-web-app-title" content="e-DC">
 <style>
   /* Écran du Directeur de course : lecture seule, mise à jour automatique depuis le PC course (ASAT Chrono). Thème Lagon de Poste ASAT. */
   :root {
@@ -260,7 +260,7 @@ function cellHTML(c, i) {
 
 /* ---------------- Affichage ---------------- */
 function headTop() {
-  return `<div class="top"><h3><span class="flagmark" aria-hidden="true"></span><span>ASAT · DC<small>${esc(S.name || (B && B.name) || (S.code ? 'Épreuve ' + S.code : 'Directeur de course'))}</small></span></h3><span class="ro">🔒 Lecture seule</span></div>`;
+  return `<div class="top"><h3><span class="flagmark" aria-hidden="true"></span><span><span style="text-transform:none">e-DC</span><small>${esc(S.name || (B && B.name) || (S.code ? 'Épreuve ' + S.code : 'Directeur de course'))}</small></span></h3><span class="ro">🔒 Lecture seule</span></div>`;
 }
 function statusHTML() {
   const off = !navigator.onLine || boardCache;

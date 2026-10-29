@@ -1,6 +1,6 @@
 {
-  "name": "ASAT · Directeur de course",
-  "short_name": "ASAT DC",
+  "name": "e-DC · Directeur de course",
+  "short_name": "e-DC",
   "description": "Temps, classement et pénalités en direct pour le Directeur de course (lecture seule)",
   "lang": "fr",
   "start_url": "./dc.html",
